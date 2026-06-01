@@ -23,8 +23,8 @@ python hh_annie_model_june_1_final.py
 ```
 
 The full simulation covers ~141 s of model time (500 ms pre + 140 s stimulus +
-500 ms post at a 1 ms timestep) and may take a few minutes on first run while
-Brian2 compiles. It opens the figures interactively and writes `soma_trace.svg`
+500 ms post at a .1 ms timestep) and should take < 5 minutes. 
+It opens the figures interactively and writes `soma_trace.svg`
 and `spike_amps.svg` to the working directory.
 
 ## Files
