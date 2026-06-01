@@ -3,7 +3,7 @@ from brian2tools import *
 from scipy.signal import find_peaks, lfilter
 
 #%% Brian2 settings
-defaultclock.dt = 1*ms
+defaultclock.dt = .1*ms
 rng = np.random.default_rng(1)
 dt_ms = float(defaultclock.dt / ms)
 
