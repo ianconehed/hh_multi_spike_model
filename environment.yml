@@ -1,0 +1,12 @@
+name: hh-annie-model
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - brian2=2.8
+  - brian2tools=0.3
+  - scipy=1.15
+  - numpy=2.2
+  - matplotlib=3.10
+  - cython
+  - c-compiler
