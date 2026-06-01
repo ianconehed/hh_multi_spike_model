@@ -1,6 +1,6 @@
 # HH Multi-Compartment Spike Model
 
-A biophysical, multi-compartment Hodgkin–Huxley neuron model built with Brian2(https://brian2.readthedocs.io). The model simulates a soma with a trunk that branches into an axon (with a distal segment and a collateral) and a dendrite, each with spatially distributed ion channels. It reproduces somatic spiking driven by Poisson stimulation of the dendrite and axon, and tracks calcium dynamics together with SK and CAN currents at the branch spike-initiation
+A biophysical, multi-compartment Hodgkin–Huxley neuron model built with Brian2 (https://brian2.readthedocs.io). The model simulates a soma with a trunk that branches into an axon (with a distal segment and a collateral) and a dendrite, each with spatially distributed ion channels. It reproduces somatic spiking driven by Poisson stimulation of the dendrite and axon, and tracks calcium dynamics together with SK and CAN currents at the branch spike-initiation
 zone (SIZ).
 
 ## Requirements
