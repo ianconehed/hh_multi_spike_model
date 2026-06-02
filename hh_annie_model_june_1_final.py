@@ -3,7 +3,7 @@ from brian2tools import *
 from scipy.signal import find_peaks, lfilter
 
 #%% Brian2 settings
-defaultclock.dt = .1*ms
+defaultclock.dt = 1*ms
 rng = np.random.default_rng(1)
 dt_ms = float(defaultclock.dt / ms)
 
@@ -213,7 +213,7 @@ stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
 stim_pulse_dur = 50   # ms per pulse
 stim_amp = 5         # pA
-stim_window = 140000   # ms total window for stim
+stim_window = 14000   # ms total window for stim
 axon_on = 1
 dend_on = 1
 
