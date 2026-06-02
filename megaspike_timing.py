@@ -167,8 +167,8 @@ def build_neuron():
     neuron.trunk.dendrite[0*um:dend_siz_start].gSK = .25*gSK0
     neuron.trunk.axon.collateral.gSK = 0*gSK0
 
-    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .75*gNa0
-    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .75*gK0
+    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .6*gNa0
+    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .6*gK0
     neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gSK = 0*gSK0
     neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gNa = .5*gNa0
     neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gK = .5*gK0
@@ -177,7 +177,7 @@ def build_neuron():
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gNa = 1.5*gNa0
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gK = 1.5*gK0
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gSK = 1.5*gSK0
-    neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1*gCAN0
+    neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1.5*gCAN0
 
     # Initial conditions
     neuron.v = -40*mV
