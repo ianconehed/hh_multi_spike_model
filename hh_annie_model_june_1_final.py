@@ -208,7 +208,6 @@ neuron[0].noise_mask = 1  # soma compartment only
 
 M = StateMonitor(neuron, ['v', 'cai', 'ISK', 'ICAN'], record=[0, int(branch_siz_center_idx), int(axon_siz_center_idx), int(dend_siz_center_idx)])
 M2 = StateMonitor(neuron, ['v'], record=True)
-#test 4
 #%% Stimulus parameters
 stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
