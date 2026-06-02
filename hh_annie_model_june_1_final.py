@@ -3,8 +3,8 @@ from brian2tools import *
 from scipy.signal import find_peaks, lfilter
 
 #%% Brian2 settings
-defaultclock.dt = 1*ms
-rng = np.random.default_rng()
+defaultclock.dt = .1*ms
+rng = np.random.default_rng(1)
 dt_ms = float(defaultclock.dt / ms)
 
 #%% Helpers
@@ -208,13 +208,13 @@ neuron[0].noise_mask = 1  # soma compartment only
 
 M = StateMonitor(neuron, ['v', 'cai', 'ISK', 'ICAN'], record=[0, int(branch_siz_center_idx), int(axon_siz_center_idx), int(dend_siz_center_idx)])
 M2 = StateMonitor(neuron, ['v'], record=True)
-
+#test 4
 #%% Stimulus parameters
 stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
 stim_pulse_dur = 50   # ms per pulse
 stim_amp = 5         # pA
-stim_window = 14000   # ms total window for stim
+stim_window = 140000   # ms total window for stim
 axon_on = 1
 dend_on = 1
 
@@ -244,7 +244,7 @@ dend_stim = TimedArray(dend_arr * pA, dt=defaultclock.dt)
 axon_stim = TimedArray(axon_arr * pA, dt=defaultclock.dt)
 
 #%% Run
-# seed(1)
+seed(1)
 run((500 + stim_window + 500) * ms, report='text')
 
 #%% Detect spikes
