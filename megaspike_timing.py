@@ -233,6 +233,7 @@ for di, delay in enumerate(delays_ms):
 
     t_axon = warmup_ms
     t_dend = warmup_ms + delay
+    t_first = min(t_axon, t_dend)   # earlier of the two inputs (anchors the windows)
 
     axon_arr = make_pulse_array(t_axon, total_steps, pulse_dur, stim_amp)
     dend_arr = make_pulse_array(t_dend, total_steps, pulse_dur, stim_amp)
@@ -253,14 +254,18 @@ for di, delay in enumerate(delays_ms):
 
         v_soma = mon.v[0] / mV
         t_ms = mon.t / ms
-        baseline = np.mean(v_soma[(t_ms > warmup_ms - 100) & (t_ms < warmup_ms)])
+        # Baseline from a guaranteed-quiet window just before the first input,
+        # so neither pulse (axon or dendrite) can contaminate it at any delay.
+        baseline = np.mean(v_soma[(t_ms > t_first - 100) & (t_ms < t_first)])
 
-        resp = v_soma[t_ms >= warmup_ms]
+        # Response window starts at the first input, so a dendrite-led
+        # response is captured for negative delays too.
+        resp = v_soma[t_ms >= t_first]
         peaks, props = find_peaks(resp, height=baseline + 5, prominence=5)
         if len(peaks):
             amp = props['peak_heights'].max() - baseline
         else:
-            amp = resp.max() - baseline
+            amp = 0.0   # no spike => amplitude 0, not the (sub-baseline) tail max
         amps.append(amp)
         if amp > megaspike_mV:
             hits += 1
