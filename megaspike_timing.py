@@ -224,8 +224,9 @@ total_ms    = warmup_ms + response_ms
 total_steps = int(total_ms / dt_ms)
 sim_time    = total_ms * ms
 
-p_megaspike = np.zeros(len(delays_ms))
-mean_amp    = np.zeros(len(delays_ms))
+p_megaspike   = np.zeros(len(delays_ms))
+sem_megaspike = np.zeros(len(delays_ms))
+mean_amp      = np.zeros(len(delays_ms))
 
 #%% Run the protocol
 for di, delay in enumerate(delays_ms):
@@ -247,6 +248,7 @@ for di, delay in enumerate(delays_ms):
 
     hits = 0
     amps = []
+    hit_flags = []   # per-trial binary megaspike outcome (for the std band)
     for trial in range(n_trials):
         restore()
         seed(1000 * di + trial)   # independent noise per trial
@@ -267,17 +269,24 @@ for di, delay in enumerate(delays_ms):
         else:
             amp = 0.0   # no spike => amplitude 0, not the (sub-baseline) tail max
         amps.append(amp)
-        if amp > megaspike_mV:
+        is_mega = amp > megaspike_mV
+        hit_flags.append(is_mega)
+        if is_mega:
             hits += 1
 
     p_megaspike[di] = hits / n_trials
+    sem_megaspike[di] = np.std(hit_flags) / np.sqrt(n_trials)   # standard error of P
     mean_amp[di] = np.mean(amps)
     print(f"delay {delay:+4d} ms:  P(megaspike) = {p_megaspike[di]:.2f}   "
           f"mean amp = {mean_amp[di]:.1f} mV")
 
 #%% Plot P(megaspike) vs delay
 fig, ax = plt.subplots(figsize=(5, 4))
-ax.plot(delays_ms, p_megaspike, 'o-', color='steelblue', lw=1.5, ms=7)
+ax.fill_between(delays_ms,
+                np.clip(p_megaspike - sem_megaspike, 0, 1),
+                np.clip(p_megaspike + sem_megaspike, 0, 1),
+                color='steelblue', alpha=0.2, lw=0, label='±1 SEM')
+ax.plot(delays_ms, p_megaspike, '-', color='steelblue', lw=1.5, ms=7)
 ax.axvline(0, color='gray', ls='--', lw=0.8)
 ax.set_xlabel('axon→dendrite delay (ms)')
 ax.set_ylabel('P(megaspike)   (amp > %d mV)' % megaspike_mV)
