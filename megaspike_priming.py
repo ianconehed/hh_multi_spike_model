@@ -1,15 +1,3 @@
-"""
-Paired-pulse protocol: P(megaspike) vs. axon-dendrite input timing.
-
-Single axonal and dendritic inputs are paired at a range of delays.
-For each delay we run several noisy trials and measure the soma spike
-amplitude; a "megaspike" is any spike whose amplitude exceeds 30 mV.
-The script plots P(megaspike) as a function of the axon->dendrite delay.
-
-Self-contained: only the model in hh_annie_model_june_1_final.py is reused
-(copied here). Nothing else from the repo is imported.
-"""
-
 from brian2 import *
 from scipy.signal import find_peaks
 
@@ -167,8 +155,8 @@ def build_neuron():
     neuron.trunk.dendrite[0*um:dend_siz_start].gSK = .25*gSK0
     neuron.trunk.axon.collateral.gSK = 0*gSK0
 
-    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .75*gNa0
-    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .75*gK0
+    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .6*gNa0
+    neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .6*gK0
     neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gSK = 0*gSK0
     neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gNa = .5*gNa0
     neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gK = .5*gK0
@@ -177,7 +165,7 @@ def build_neuron():
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gNa = 1.5*gNa0
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gK = 1.5*gK0
     neuron.trunk.axon[branch_siz_start:branch_siz_end].gSK = 1.5*gSK0
-    neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1*gCAN0
+    neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1.5*gCAN0
 
     # Initial conditions
     neuron.v = -40*mV
@@ -200,9 +188,8 @@ def build_neuron():
     return neuron
 
 
-def make_pulse_array(onset_ms, total_steps, pulse_dur_ms, amp_pA):
-    """Return a step-current array with a single pulse starting at onset_ms."""
-    arr = np.zeros(total_steps)
+def add_pulse(arr, onset_ms, pulse_dur_ms, amp_pA):
+    """Add a single step pulse (in place) starting at onset_ms."""
     i0 = int(onset_ms / dt_ms)
     i1 = int((onset_ms + pulse_dur_ms) / dt_ms)
     arr[i0:i1] = amp_pA
@@ -210,104 +197,107 @@ def make_pulse_array(onset_ms, total_steps, pulse_dur_ms, amp_pA):
 
 
 #%% Protocol parameters
-warmup_ms     = 500     # settle before the paired pulse
-response_ms   = 1000    # observation window after the pulses
+warmup_ms     = 500     # settle before the first input
+response_ms   = 1000    # observation window after the pairing
 pulse_dur     = 50      # ms, single-pulse duration (per input)
 stim_amp      = 5       # pA, per-input amplitude
 megaspike_mV  = 25      # spike-amplitude threshold for a "megaspike"
-n_trials      = 15      # noisy repeats per delay
+n_trials      = 8       # noisy repeats per delay
 
 # Delay = t_dend - t_axon (positive => dendrite lags axon)
-delays_ms = np.arange(-300, 301, 10)
+delays_ms = np.arange(-400, 401, 20)
 
-total_ms    = warmup_ms + response_ms
+# Place the axonal input far enough out that the most dendrite-led (most
+# negative) delay still lands after the warmup, so every pulse is in range and
+# the pre-warmup baseline window is always clear of both inputs.
+t_axon  = warmup_ms + max(0, -int(min(delays_ms)))
+
+# Pad the end so the latest dendrite pulse + response window always fits.
+total_ms    = t_axon + max(delays_ms) + pulse_dur + response_ms
 total_steps = int(total_ms / dt_ms)
 sim_time    = total_ms * ms
 
-p_megaspike   = np.zeros(len(delays_ms))
-sem_megaspike = np.zeros(len(delays_ms))
-mean_amp      = np.zeros(len(delays_ms))
 
-#%% Run the protocol
+def run_sweep():
+    """Run the delay sweep (pairing alone); return per-trial amplitudes.
+
+    Returns an array of shape (n_delays, n_trials) of soma spike amplitudes.
+    """
+    amp_trials = np.zeros((len(delays_ms), n_trials))
+
+    for di, delay in enumerate(delays_ms):
+        start_scope()
+
+        t_dend  = t_axon + delay
+        t_first = min(t_axon, t_dend)   # earlier of the two pairing inputs
+
+        axon_arr = np.zeros(total_steps)
+        dend_arr = np.zeros(total_steps)
+        add_pulse(axon_arr, t_axon, pulse_dur, stim_amp)
+        add_pulse(dend_arr, t_dend, pulse_dur, stim_amp)
+
+        axon_stim = TimedArray(axon_arr * pA, dt=defaultclock.dt)
+        dend_stim = TimedArray(dend_arr * pA, dt=defaultclock.dt)
+
+        neuron = build_neuron()
+        mon = StateMonitor(neuron, 'v', record=[0])  # soma only
+        store()
+
+        hits = 0
+        amps = []
+        for trial in range(n_trials):
+            restore()
+            seed(1000 * di + trial)   # independent noise per trial
+            run(sim_time)
+
+            v_soma = mon.v[0] / mV
+            t_ms = mon.t / ms
+            # Resting baseline from a quiet window during warmup, before any input.
+            baseline = np.mean(v_soma[(t_ms > warmup_ms - 100) & (t_ms < warmup_ms)])
+
+            # Response window starts at the pairing's first input (captures a
+            # dendrite-led response for negative delays too).
+            resp = v_soma[t_ms >= t_first]
+            peaks, props = find_peaks(resp, height=baseline + 5, prominence=5)
+            if len(peaks):
+                amp = props['peak_heights'].max() - baseline
+            else:
+                amp = 0.0
+            amps.append(amp)
+            if amp > megaspike_mV:
+                hits += 1
+
+        amp_trials[di] = amps
+        print(f"delay {delay:+5d} ms:  P(megaspike) = {hits / n_trials:.2f}   "
+              f"mean amp = {np.mean(amps):.1f} mV")
+
+    return amp_trials
+
+
+#%% Run the control sweep
+amp_trials_ctrl = run_sweep()
+
+#%% Scatter of per-trial spike amplitudes at each delay
+fig3, ax3 = plt.subplots(figsize=(8, 4))
+# Jitter within each delay bin so overlapping trials are visible.
+step = float(np.min(np.diff(delays_ms))) if len(delays_ms) > 1 else 20.0
+half = step * 0.18
 for di, delay in enumerate(delays_ms):
-    start_scope()
-
-    t_axon = warmup_ms
-    t_dend = warmup_ms + delay
-    t_first = min(t_axon, t_dend)   # earlier of the two inputs (anchors the windows)
-
-    axon_arr = make_pulse_array(t_axon, total_steps, pulse_dur, stim_amp)
-    dend_arr = make_pulse_array(t_dend, total_steps, pulse_dur, stim_amp)
-    axon_stim = TimedArray(axon_arr * pA, dt=defaultclock.dt)
-    dend_stim = TimedArray(dend_arr * pA, dt=defaultclock.dt)
-
-    neuron = build_neuron()
-    mon = StateMonitor(neuron, 'v', record=[0])  # soma only
-
-    store()
-
-    hits = 0
-    amps = []
-    hit_flags = []   # per-trial binary megaspike outcome (for the std band)
-    for trial in range(n_trials):
-        restore()
-        seed(1000 * di + trial)   # independent noise per trial
-        run(sim_time)
-
-        v_soma = mon.v[0] / mV
-        t_ms = mon.t / ms
-        # Baseline from a guaranteed-quiet window just before the first input,
-        # so neither pulse (axon or dendrite) can contaminate it at any delay.
-        baseline = np.mean(v_soma[(t_ms > t_first - 100) & (t_ms < t_first)])
-
-        # Response window starts at the first input, so a dendrite-led
-        # response is captured for negative delays too.
-        resp = v_soma[t_ms >= t_first]
-        peaks, props = find_peaks(resp, height=baseline + 5, prominence=5)
-        if len(peaks):
-            amp = props['peak_heights'].max() - baseline
-        else:
-            amp = 0.0   # no spike => amplitude 0, not the (sub-baseline) tail max
-        amps.append(amp)
-        is_mega = amp > megaspike_mV
-        hit_flags.append(is_mega)
-        if is_mega:
-            hits += 1
-
-    p_megaspike[di] = hits / n_trials
-    sem_megaspike[di] = np.std(hit_flags) / np.sqrt(n_trials)   # standard error of P
-    mean_amp[di] = np.mean(amps)
-    print(f"delay {delay:+4d} ms:  P(megaspike) = {p_megaspike[di]:.2f}   "
-          f"mean amp = {mean_amp[di]:.1f} mV")
-
-#%% Plot P(megaspike) vs delay
-fig, ax = plt.subplots(figsize=(5, 4))
-ax.fill_between(delays_ms,
-                np.clip(p_megaspike - sem_megaspike, 0, 1),
-                np.clip(p_megaspike + sem_megaspike, 0, 1),
-                color='steelblue', alpha=0.2, lw=0, label='±1 SEM')
-ax.plot(delays_ms, p_megaspike, '-', color='steelblue', lw=1.5, ms=7)
-ax.axvline(0, color='gray', ls='--', lw=0.8)
-ax.set_xlabel('axon→dendrite delay (ms)')
-ax.set_ylabel('P(megaspike)   (amp > %d mV)' % megaspike_mV)
-ax.set_ylim(-0.05, 1.05)
-ax.set_title('Megaspike probability vs. input timing')
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-fig.tight_layout()
-fig.savefig('megaspike_vs_timing.svg', format='svg', bbox_inches='tight')
-
-#%% Plot mean spike amplitude vs delay (companion view)
-fig2, ax2 = plt.subplots(figsize=(5, 4))
-ax2.plot(delays_ms, mean_amp, 's-', color='tomato', lw=1.5, ms=7)
-ax2.axhline(megaspike_mV, color='gray', ls='--', lw=0.8, label='megaspike threshold')
-ax2.axvline(0, color='gray', ls=':', lw=0.8)
-ax2.set_xlabel('axon→dendrite delay (ms)')
-ax2.set_ylabel('mean spike amplitude (mV)')
-ax2.set_title('Spike amplitude vs. input timing')
-ax2.legend(fontsize=8)
-ax2.spines['top'].set_visible(False)
-ax2.spines['right'].set_visible(False)
-fig2.tight_layout()
+    y = amp_trials_ctrl[di]
+    x = delay + rng.uniform(-half, half, size=len(y))
+    ax3.plot(x, y, 'o', mfc='none', mec='steelblue', mew=1.0, ms=5, alpha=0.6)
+# Mean overlay so the trend is readable through the cloud.
+ax3.plot(delays_ms, amp_trials_ctrl.mean(axis=1), '-', color='steelblue', lw=1.5,
+         label='control (pairing alone)')
+ax3.axhline(megaspike_mV, color='gray', ls='--', lw=0.8, label='megaspike threshold')
+ax3.axvline(0, color='gray', ls=':', lw=0.8)
+ax3.set_xlabel('axon→dendrite delay (ms)')
+ax3.set_ylabel('per-trial spike amplitude (mV)')
+ax3.set_title('Per-trial spike amplitude vs. axon→dendrite delay')
+ax3.legend(fontsize=8)
+ax3.spines['top'].set_visible(False)
+ax3.spines['right'].set_visible(False)
+fig3.tight_layout()
+fig3.savefig('megaspike_priming_amp_scatter.svg', format='svg', bbox_inches='tight')
 
 plt.show()

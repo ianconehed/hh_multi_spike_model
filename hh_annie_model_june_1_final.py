@@ -177,8 +177,8 @@ neuron.trunk.axon.distal[0*um:axon_proximal_len].gSK = .25*gSK0
 neuron.trunk.dendrite[0*um:dend_siz_start].gSK = .25*gSK0
 neuron.trunk.axon.collateral.gSK = 0*gSK0
 
-neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .75*gNa0
-neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .75*gK0
+neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gNa = .6*gNa0
+neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gK = .6*gK0
 neuron.trunk.axon.distal[axon_siz_start - axon_proximal_len:axon_siz_end - axon_proximal_len].gSK = 0*gSK0
 neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gNa = .5*gNa0
 neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gK = .5*gK0
@@ -187,7 +187,7 @@ neuron.trunk.dendrite[dend_siz_start:dend_siz_end].gSK = 0*gSK0
 neuron.trunk.axon[branch_siz_start:branch_siz_end].gNa = 1.5*gNa0
 neuron.trunk.axon[branch_siz_start:branch_siz_end].gK = 1.5*gK0
 neuron.trunk.axon[branch_siz_start:branch_siz_end].gSK = 1.5*gSK0
-neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1*gCAN0
+neuron.trunk.axon[branch_siz_start:branch_siz_end].gCAN = 1.5*gCAN0
 
 #%% Intial conditions and monitors
 neuron.v = -40*mV
@@ -208,7 +208,6 @@ neuron[0].noise_mask = 1  # soma compartment only
 
 M = StateMonitor(neuron, ['v', 'cai', 'ISK', 'ICAN'], record=[0, int(branch_siz_center_idx), int(axon_siz_center_idx), int(dend_siz_center_idx)])
 M2 = StateMonitor(neuron, ['v'], record=True)
-#test 4
 #%% Stimulus parameters
 stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
