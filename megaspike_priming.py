@@ -221,7 +221,7 @@ def add_pulse(arr, onset_ms, pulse_dur_ms, amp_pA):
 
 #%% Protocol parameters
 warmup_ms     = 500     # settle before any input
-cond_gap_ms   = 3500    # the conditioning megaspike precedes the pairing by this
+cond_gap_ms   = 4500    # the conditioning megaspike precedes the pairing by this
 response_ms   = 1000    # observation window after the pairing
 pulse_dur     = 50      # ms, single-pulse duration (per input)
 stim_amp      = 5       # pA, per-input amplitude
@@ -229,7 +229,7 @@ megaspike_mV  = 25      # spike-amplitude threshold for a "megaspike"
 n_trials      = 5      # noisy repeats per delay
 
 # Delay = t_dend - t_axon (positive => dendrite lags axon)
-delays_ms = np.arange(-2000, 2001, 50)
+delays_ms = np.arange(-4000, 4001, 1000)
 
 # The pairing's axonal input sits at the same absolute time in both conditions.
 # It is placed cond_gap_ms after the (potential) conditioning megaspike so that
