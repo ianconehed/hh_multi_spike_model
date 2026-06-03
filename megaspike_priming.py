@@ -202,10 +202,10 @@ response_ms   = 1000    # observation window after the pairing
 pulse_dur     = 50      # ms, single-pulse duration (per input)
 stim_amp      = 5       # pA, per-input amplitude
 megaspike_mV  = 25      # spike-amplitude threshold for a "megaspike"
-n_trials      = 5       # noisy repeats per delay
+n_trials      = 8       # noisy repeats per delay
 
 # Delay = t_dend - t_axon (positive => dendrite lags axon)
-delays_ms = np.arange(-4000, 4001, 1000)
+delays_ms = np.arange(-400, 401, 20)
 
 # Place the axonal input far enough out that the most dendrite-led (most
 # negative) delay still lands after the warmup, so every pulse is in range and
