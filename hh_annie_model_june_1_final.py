@@ -330,14 +330,14 @@ dend_event_times = dend_times + stim_offset_ms
 
 peak_amp_rel = peak_amps + V_REST_OFFSET      # amplitude of every detected soma peak
 
-offsets  = []   # signed dt = t_dend - t_axon to closest (in |time|) dendritic input, per axon input
+offsets  = []   # signed dt to closest dendritic input, per axon input
 amps     = []   # amplitude of the spike triggered by that axon input (nan if none)
 category = []   # 1 = megaspike, 0 = minispike, nan = no spike triggered
 
 for t_ax in axon_event_times:
     if len(dend_event_times) > 0:
         j  = np.argmin(np.abs(dend_event_times - t_ax))
-        dt = dend_event_times[j] - t_ax   # signed offset to nearest-in-time dendritic input (- = dend leads)
+        dt = np.abs(dend_event_times[j] - t_ax)   # unsigned offset to closest dendritic input
     else:
         dt = np.nan
     in_win = (peak_times >= t_ax) & (peak_times <= t_ax + ATTRIB_WINDOW)
@@ -368,8 +368,7 @@ ax_sc.scatter(offsets[mini], amps[mini], facecolors='none', edgecolors='steelblu
 ax_sc.scatter(offsets[mega], amps[mega], facecolors='none', edgecolors='tomato',
               label='megaspike', alpha=0.8)
 ax_sc.axhline(MEGASPIKE_THRESH, color='gray', ls='--', lw=1)
-ax_sc.axvline(0, color='k', lw=0.5)
-ax_sc.set_xlabel('axon→dendrite offset Δt = t_dend − t_axon (ms)')
+ax_sc.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
 ax_sc.set_ylabel('spike amplitude (mV)')
 ax_sc.legend(frameon=False, fontsize=8)
 fig_sc.tight_layout()
@@ -379,7 +378,7 @@ triggered = ~np.isnan(category)
 ofs = offsets[triggered]
 cat = category[triggered]
 
-bin_edges = np.arange(-200, 201, 25)
+bin_edges = np.arange(0, 201, 25)
 bin_cent  = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 idx       = np.digitize(ofs, bin_edges) - 1
 b_mega = np.zeros(len(bin_cent))
@@ -396,8 +395,7 @@ ax_cnt = ax_pr.twinx()
 ax_cnt.bar(bin_cent, b_tot, width=20, color='lightgray', alpha=0.6, zorder=0,
            label='# triggered spikes')
 ax_pr.plot(bin_cent, prob, '-o', color='tomato', zorder=2, label='P(megaspike)')
-ax_pr.axvline(0, color='k', lw=0.5)
-ax_pr.set_xlabel('axon→dendrite offset Δt = t_dend − t_axon (ms)')
+ax_pr.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
 ax_pr.set_ylabel('P(megaspike | spike)', color='tomato')
 ax_pr.set_ylim(-0.02, 1.02)
 ax_pr.tick_params(axis='y', labelcolor='tomato')
@@ -414,11 +412,11 @@ from matplotlib.patches import Patch
 OUTLIER_OFFSET = 500.0    # ms; megaspikes whose nearest dend input is beyond this are "isolated"
 ZOOM           = 1500.0   # ms shown on each side of the triggering axon input
 
-outlier_idx = np.where((category == 1) & (np.abs(offsets) > OUTLIER_OFFSET))[0]
+outlier_idx = np.where((category == 1) & (offsets > OUTLIER_OFFSET))[0]
 print(f'\n{len(outlier_idx)} isolated megaspikes (|Δt| > {OUTLIER_OFFSET:.0f} ms):')
 for k in outlier_idx:
-    print(f'  axon input @ {axon_event_times[k]/1000:.2f} s | nearest dend Δt = '
-          f'{offsets[k]:+.0f} ms | amp = {amps[k]:.1f} mV')
+    print(f'  axon input @ {axon_event_times[k]/1000:.2f} s | nearest dend |Δt| = '
+          f'{offsets[k]:.0f} ms | amp = {amps[k]:.1f} mV')
 
 # Mark all outlier axon inputs on the full soma trace
 fig_ov, ax_ov = plt.subplots(figsize=(14, 2.5))
@@ -447,7 +445,7 @@ if n_show > 0:
         ax.axvline(t0, color='red', lw=1.0)
         pm = (peak_times >= t0 - ZOOM) & (peak_times <= t0 + ZOOM)
         ax.plot(peak_times[pm], peak_amps[pm], 'rx', ms=8)
-        ax.set_title(f'axon @ {t0/1000:.2f} s | nearest dend Δt = {offsets[k]:+.0f} ms | '
+        ax.set_title(f'axon @ {t0/1000:.2f} s | nearest dend |Δt| = {offsets[k]:.0f} ms | '
                      f'amp = {amps[k]:.1f} mV', fontsize=8)
         ax.set_ylabel('V_soma (mV)')
     axz[-1, 0].set_xlabel('time (ms)')
@@ -456,68 +454,5 @@ if n_show > 0:
                               Patch(color='red', label='triggering axon input')],
                      fontsize=7, loc='upper right')
     fig_z.tight_layout()
-
-#%% Four-case split: bursting state (branch Ca²⁺) × coincidence (|Δt|)
-BURST_CA_THRESH = CahalfCAN   # branch [Ca²⁺] above CAN half-activation (0.02 mM) => 'bursting' up-state
-DT_NEAR         = 100.0       # ms; |Δt| < this is 'coincident'
-
-# Branch-SIZ [Ca²⁺] at each axon-input time (M record index 1 = branch SIZ center)
-m_t          = M.t / ms
-branch_cai   = M.cai[1] / mmolar
-cai_at_input = np.interp(axon_event_times, m_t, branch_cai)   # mmolar at input onset
-
-is_burst = cai_at_input > (BURST_CA_THRESH / mmolar)
-is_near  = np.abs(offsets) < DT_NEAR
-trig     = ~np.isnan(category)
-
-case_labels = ['non-burst\n|Δt|<100', 'non-burst\n|Δt|>100',
-               'burst\n|Δt|<100',     'burst\n|Δt|>100']
-case_masks  = [(~is_burst) & is_near,
-               (~is_burst) & (~is_near),
-               ( is_burst) & is_near,
-               ( is_burst) & (~is_near)]
-
-viol_data  = [amps[m & trig] for m in case_masks]                 # spike amplitudes per case
-frac_mega  = [np.mean(category[m & trig] == 1) if np.any(m & trig) else np.nan
-              for m in case_masks]
-n_per      = [int(np.sum(m & trig)) for m in case_masks]
-print('\nFour-case split (triggered spikes only):')
-for lab, fr, n in zip([l.replace(chr(10), ' ') for l in case_labels], frac_mega, n_per):
-    print(f'  {lab:22s} n={n:4d}  P(mega)={fr:.2f}')
-
-# Violin plots of spike amplitude per case
-positions = np.arange(1, 5)
-fig_v, ax_v = plt.subplots(figsize=(7, 5))
-ne_pos = [p for p, d in zip(positions, viol_data) if len(d) > 1]
-ne_dat = [d for d in viol_data if len(d) > 1]
-if ne_dat:
-    ax_v.violinplot(ne_dat, positions=ne_pos, showmedians=True, widths=0.8)
-for p, d in zip(positions, viol_data):
-    if len(d):
-        ax_v.plot(p + rng.uniform(-0.12, 0.12, size=len(d)), d,
-                  'o', ms=4, mfc='none', mec='gray', alpha=0.5)
-ax_v.axhline(MEGASPIKE_THRESH, color='red', ls='--', lw=1, label=f'{MEGASPIKE_THRESH:.0f} mV')
-ax_v.set_xticks(positions)
-ax_v.set_xticklabels([f'{lab}\n(n={len(d)})' for lab, d in zip(case_labels, viol_data)], fontsize=8)
-ax_v.set_ylabel('spike amplitude (mV)')
-ax_v.set_title('Spike amplitude: bursting × coincidence')
-ax_v.legend(fontsize=8)
-fig_v.tight_layout()
-fig_v.savefig('amp_violin_4case.svg', format='svg', bbox_inches='tight')
-
-# Fraction of spikes that are megaspikes per case
-fig_f, ax_f = plt.subplots(figsize=(6, 5))
-colors = ['steelblue', 'lightsteelblue', 'tomato', 'navajowhite']
-ax_f.bar(positions, frac_mega, color=colors)
-for p, fr, n in zip(positions, frac_mega, n_per):
-    if not np.isnan(fr):
-        ax_f.text(p, fr + 0.02, f'{fr:.2f}\n(n={n})', ha='center', va='bottom', fontsize=8)
-ax_f.set_xticks(positions)
-ax_f.set_xticklabels(case_labels, fontsize=8)
-ax_f.set_ylabel('fraction megaspikes')
-ax_f.set_ylim(0, 1.05)
-ax_f.set_title('Megaspike fraction: bursting × coincidence')
-fig_f.tight_layout()
-fig_f.savefig('megaspike_frac_4case.svg', format='svg', bbox_inches='tight')
 
 plt.show()
