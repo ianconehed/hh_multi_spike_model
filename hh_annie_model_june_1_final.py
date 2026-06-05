@@ -135,24 +135,17 @@ neuron = SpatialNeuron(morphology=morpho, model=eqs, method="heun",
 
 branch_siz_start = 0*um
 branch_siz_end = 20*um
-branch_siz_size = abs(branch_siz_start-branch_siz_end)
-branch_siz_center = branch_siz_start + branch_siz_size/2
-branch_siz_center_idx = axon_start_idx + branch_siz_center/um 
 
 dend_siz_start = 85*um
 dend_siz_end   = 175*um
 dend_siz_size = abs(dend_siz_start-dend_siz_end)
 dend_siz_center = dend_siz_start + dend_siz_size/2
-dend_siz_center_idx = dendrite_start_idx + dend_siz_center/um
 
 axon_siz_start = 90*um
 axon_siz_end   = 130*um
 axon_proximal_len = 70*um
 axon_siz_size = abs(axon_siz_start-axon_siz_end)
 axon_siz_center = axon_siz_start + axon_siz_size/2
-# SIZ falls in axon.distal (which starts at index 141, 70 um from branch point)
-axon_siz_center_idx = axon_distal_start_idx + (axon_siz_center - axon_proximal_len)/um
-
 
 dend_input_start = dend_siz_center - 2.5*um
 dend_input_end   = dend_siz_center + 2.5*um
@@ -210,8 +203,7 @@ neuron.trunk.axon.distal[axon_input_start - axon_proximal_len:axon_input_end - a
 neuron.noise_mask = 0
 neuron[0].noise_mask = 1  # soma compartment only
 
-M = StateMonitor(neuron, ['v', 'cai', 'ISK', 'ICAN'], record=[0, int(branch_siz_center_idx), int(axon_siz_center_idx), int(dend_siz_center_idx)])
-M2 = StateMonitor(neuron, ['v'], record=True)
+M = StateMonitor(neuron, ['v'], record=[0])
 
 #%% Stimulus parameters
 stim_rate_dend = .5  # Hz
@@ -258,21 +250,6 @@ peaks, props = find_peaks(v_soma, height=-35, distance=100, prominence=5)
 peak_times = t_plot[peaks]
 peak_amps = props['peak_heights']
 
-#%% Plot peaks
-plt.figure()
-plot(t_plot, v_soma)
-plot(peak_times, peak_amps, 'rx', markersize=10)
-ylim(-65, 0)
-ylabel('V_{soma} (mV)')
-xlabel('time (ms)')
-
-# for col, label in [(0, 'soma'), (1, 'branch'), (2, 'axon'), (3, 'dend')]:
-#     plt.figure()
-#     plot(t_plot, M.v.T[:, col] / mV)
-#     ylim(-65, 0)
-#     ylabel(f'V_{{{label}}} (mV)')
-#     xlabel('time (ms)')
-
 #%% Plot soma trace
 t_s = t_plot / 1000  
 fig_trace, ax_trace = plt.subplots(figsize=(14, 2.5))
@@ -301,23 +278,8 @@ ax.spines['right'].set_visible(False)
 ax.spines['bottom'].set_visible(False)
 fig.savefig('spike_amps.svg', format='svg', bbox_inches='tight')
 
-#%% Plot Calcium
-fig_cai, ax_cai = plt.subplots(figsize=(14, 2.5))
-ax_isk = ax_cai.twinx()
-t_s = t_plot / 1000
-ax_cai.plot(t_s, M.cai[1] / mmolar * 1000, color='tomato', linewidth=0.8, label='[Ca²⁺]')
-ax_isk.plot(t_s, M.ISK[1] / (amp/meter**2) * 100, color='steelblue', linewidth=0.8, alpha=0.8, label='ISK')
-ax_isk.plot(t_s, M.ICAN[1] / (amp/meter**2) * 100, color='darkorchid', linewidth=0.8, alpha=0.8, label='ICAN')
-ax_isk.legend(loc='upper right', fontsize=8)
-ax_cai.set_xlabel('time (s)')
-ax_cai.set_ylabel('[Ca²⁺] (µM)', color='tomato')
-ax_isk.set_ylabel('current (µA/cm²)', color='gray')
-ax_cai.tick_params(axis='y', labelcolor='tomato')
-ax_cai.set_title('Branch SIZ — [Ca²⁺], ISK, and ICAN')
-fig_cai.tight_layout()
-
 #%% Megaspike probability vs axon-dendrite input timing
-# For each axon input: find the closest dendritic input (signed offset dt = t_dend - t_axon),
+# For each axon input: find the closest dendritic input (unsigned offset |dt| = |t_dend - t_axon|),
 # then classify the spike that axon input triggered as megaspike vs minispike.
 MEGASPIKE_THRESH = 25.0      # mV spike amplitude dividing mega- from mini-spikes
 V_REST_OFFSET    = 42.0      # amplitude = peak voltage + 42 mV (rest = -42 mV); change to 0 for raw peak_amps
@@ -330,7 +292,7 @@ dend_event_times = dend_times + stim_offset_ms
 
 peak_amp_rel = peak_amps + V_REST_OFFSET      # amplitude of every detected soma peak
 
-offsets  = []   # signed dt to closest dendritic input, per axon input
+offsets  = []   # unsigned |dt| to closest dendritic input, per axon input
 amps     = []   # amplitude of the spike triggered by that axon input (nan if none)
 category = []   # 1 = megaspike, 0 = minispike, nan = no spike triggered
 
@@ -372,87 +334,5 @@ ax_sc.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
 ax_sc.set_ylabel('spike amplitude (mV)')
 ax_sc.legend(frameon=False, fontsize=8)
 fig_sc.tight_layout()
-
-#%% Binned probability of megaspike vs timing offset
-triggered = ~np.isnan(category)
-ofs = offsets[triggered]
-cat = category[triggered]
-
-bin_edges = np.arange(0, 201, 25)
-bin_cent  = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-idx       = np.digitize(ofs, bin_edges) - 1
-b_mega = np.zeros(len(bin_cent))
-b_mini = np.zeros(len(bin_cent))
-for b in range(len(bin_cent)):
-    sel = idx == b
-    b_mega[b] = np.sum(cat[sel] == 1)
-    b_mini[b] = np.sum(cat[sel] == 0)
-b_tot = b_mega + b_mini
-prob  = np.where(b_tot > 0, b_mega / b_tot, np.nan)
-
-fig_pr, ax_pr = plt.subplots(figsize=(7, 4))
-ax_cnt = ax_pr.twinx()
-ax_cnt.bar(bin_cent, b_tot, width=20, color='lightgray', alpha=0.6, zorder=0,
-           label='# triggered spikes')
-ax_pr.plot(bin_cent, prob, '-o', color='tomato', zorder=2, label='P(megaspike)')
-ax_pr.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
-ax_pr.set_ylabel('P(megaspike | spike)', color='tomato')
-ax_pr.set_ylim(-0.02, 1.02)
-ax_pr.tick_params(axis='y', labelcolor='tomato')
-ax_cnt.set_ylabel('# triggered spikes', color='gray')
-ax_cnt.tick_params(axis='y', labelcolor='gray')
-ax_pr.set_zorder(ax_cnt.get_zorder() + 1)
-ax_pr.patch.set_visible(False)
-fig_pr.tight_layout()
-fig_pr.savefig('megaspike_prob_vs_timing.svg', format='svg', bbox_inches='tight')
-
-#%% Inspect outlier megaspikes (megaspike despite large |Δt| to nearest dend input)
-from matplotlib.patches import Patch
-
-OUTLIER_OFFSET = 500.0    # ms; megaspikes whose nearest dend input is beyond this are "isolated"
-ZOOM           = 1500.0   # ms shown on each side of the triggering axon input
-
-outlier_idx = np.where((category == 1) & (offsets > OUTLIER_OFFSET))[0]
-print(f'\n{len(outlier_idx)} isolated megaspikes (|Δt| > {OUTLIER_OFFSET:.0f} ms):')
-for k in outlier_idx:
-    print(f'  axon input @ {axon_event_times[k]/1000:.2f} s | nearest dend |Δt| = '
-          f'{offsets[k]:.0f} ms | amp = {amps[k]:.1f} mV')
-
-# Mark all outlier axon inputs on the full soma trace
-fig_ov, ax_ov = plt.subplots(figsize=(14, 2.5))
-ax_ov.plot(t_plot / 1000, v_soma, color='black', lw=0.4)
-for k in outlier_idx:
-    ax_ov.axvline(axon_event_times[k] / 1000, color='red', lw=0.8, alpha=0.7)
-ax_ov.set_xlabel('time (s)')
-ax_ov.set_ylabel('V_soma (mV)')
-ax_ov.set_title(f'soma trace — red = isolated megaspike axon inputs (n={len(outlier_idx)})')
-fig_ov.tight_layout()
-
-# Zoomed traces around each outlier
-n_show = min(len(outlier_idx), 6)
-if n_show > 0:
-    fig_z, axz = plt.subplots(n_show, 1, figsize=(10, 2.2 * n_show), squeeze=False)
-    for ax, k in zip(axz[:, 0], outlier_idx[:n_show]):
-        t0 = axon_event_times[k]
-        win = (t_plot >= t0 - ZOOM) & (t_plot <= t0 + ZOOM)
-        ax.plot(t_plot[win], v_soma[win], color='black', lw=0.6)
-        for ta in axon_event_times:
-            if t0 - ZOOM <= ta <= t0 + ZOOM:
-                ax.axvspan(ta, ta + stim_pulse_dur, color='steelblue', alpha=0.25)
-        for td in dend_event_times:
-            if t0 - ZOOM <= td <= t0 + ZOOM:
-                ax.axvspan(td, td + stim_pulse_dur, color='seagreen', alpha=0.25)
-        ax.axvline(t0, color='red', lw=1.0)
-        pm = (peak_times >= t0 - ZOOM) & (peak_times <= t0 + ZOOM)
-        ax.plot(peak_times[pm], peak_amps[pm], 'rx', ms=8)
-        ax.set_title(f'axon @ {t0/1000:.2f} s | nearest dend |Δt| = {offsets[k]:.0f} ms | '
-                     f'amp = {amps[k]:.1f} mV', fontsize=8)
-        ax.set_ylabel('V_soma (mV)')
-    axz[-1, 0].set_xlabel('time (ms)')
-    axz[0, 0].legend(handles=[Patch(color='steelblue', alpha=0.25, label='axon pulse'),
-                              Patch(color='seagreen', alpha=0.25, label='dend pulse'),
-                              Patch(color='red', label='triggering axon input')],
-                     fontsize=7, loc='upper right')
-    fig_z.tight_layout()
 
 plt.show()
