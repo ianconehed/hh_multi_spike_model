@@ -210,7 +210,7 @@ stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
 stim_pulse_dur = 50   # ms per pulse
 stim_amp = 5         # pA
-stim_window = 1400000   # ms total window for stim
+stim_window = 3*1400000   # ms total window for stim
 axon_on = 1
 dend_on = 1
 
@@ -322,17 +322,52 @@ n_none = int(np.sum(np.isnan(category)))
 print(f'Axon inputs: {len(offsets)} | megaspikes: {n_mega} | minispikes: {n_mini} | no spike: {n_none}')
 
 #%% Scatter: timing offset vs triggered spike amplitude
+# Each dot is drawn as its own marker so it exports as a separate, individually-editable SVG element.
+from matplotlib.lines import Line2D
+
+XMAX = 1000   # ms; only plot dots within the visible window so clipping isn't needed
 fig_sc, ax_sc = plt.subplots(figsize=(6, 4))
-mega = category == 1
-mini = category == 0
-ax_sc.scatter(offsets[mini], amps[mini], facecolors='none', edgecolors='steelblue',
-              label='minispike', alpha=0.8)
-ax_sc.scatter(offsets[mega], amps[mega], facecolors='none', edgecolors='tomato',
-              label='megaspike', alpha=0.8)
+mega = (category == 1) & (offsets <= XMAX)
+mini = (category == 0) & (offsets <= XMAX)
+# clip_on=False -> no per-marker clip path is written to the SVG (no boxes to release in Illustrator)
+for x, y in zip(offsets[mini], amps[mini]):
+    ax_sc.plot(x, y, 'o', mfc='none', mec='0.6', mew=1.0, ms=6, alpha=0.35, clip_on=False)
+for x, y in zip(offsets[mega], amps[mega]):
+    ax_sc.plot(x, y, 'o', mfc='royalblue', mec='royalblue', mew=0, ms=8, alpha=0.85, clip_on=False)
 ax_sc.axhline(MEGASPIKE_THRESH, color='gray', ls='--', lw=1)
+ax_sc.set_xlim(0, XMAX)
 ax_sc.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
 ax_sc.set_ylabel('spike amplitude (mV)')
-ax_sc.legend(frameon=False, fontsize=8)
+ax_sc.legend(handles=[Line2D([], [], marker='o', ls='', mfc='none', mec='0.6', label='minispike'),
+                      Line2D([], [], marker='o', ls='', mfc='royalblue', mec='royalblue', label='megaspike')],
+             frameon=False, fontsize=8)
 fig_sc.tight_layout()
+fig_sc.savefig('megaspike_scatter.svg', format='svg', bbox_inches='tight')
+
+#%% Histogram: fraction of triggered spikes that are megaspikes per 50 ms |Δt| bin
+BIN_MS  = 50
+h_edges = np.arange(0, XMAX + BIN_MS, BIN_MS)
+h_cent  = 0.5 * (h_edges[:-1] + h_edges[1:])
+
+triggered = ~np.isnan(category)          # spikes that were actually triggered (mega or mini)
+ofs_t = offsets[triggered]
+cat_t = category[triggered]
+which = np.digitize(ofs_t, h_edges) - 1  # bin index for each spike
+
+frac = np.full(len(h_cent), np.nan)      # NaN -> empty bin (no bar drawn)
+for b in range(len(h_cent)):
+    sel = which == b
+    if np.any(sel):
+        frac[b] = np.mean(cat_t[sel] == 1)
+
+fig_h, ax_h = plt.subplots(figsize=(6, 4))
+ax_h.bar(h_cent, frac, width=BIN_MS * 0.9, color='royalblue', edgecolor='black', lw=0.5)
+ax_h.set_xlim(0, XMAX)
+ax_h.set_ylim(0, 1)
+ax_h.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
+ax_h.set_ylabel('fraction megaspikes')
+fig_h.tight_layout()
+fig_h.savefig('megaspike_fraction_hist.svg', format='svg', bbox_inches='tight')
 
 plt.show()
+# %%
