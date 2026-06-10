@@ -210,7 +210,7 @@ stim_rate_dend = .5  # Hz
 stim_rate_axon = .5 # Hz
 stim_pulse_dur = 50   # ms per pulse
 stim_amp = 5         # pA
-stim_window = 3*1400000   # ms total window for stim
+stim_window = 10*1400000   # ms total window for stim
 axon_on = 1
 dend_on = 1
 
@@ -325,7 +325,8 @@ print(f'Axon inputs: {len(offsets)} | megaspikes: {n_mega} | minispikes: {n_mini
 # Each dot is drawn as its own marker so it exports as a separate, individually-editable SVG element.
 from matplotlib.lines import Line2D
 
-XMAX = 1000   # ms; only plot dots within the visible window so clipping isn't needed
+XMAX = 400   # ms; only plot dots within the visible window so clipping isn't needed
+YMAX = 45
 fig_sc, ax_sc = plt.subplots(figsize=(6, 4))
 mega = (category == 1) & (offsets <= XMAX)
 mini = (category == 0) & (offsets <= XMAX)
@@ -336,6 +337,7 @@ for x, y in zip(offsets[mega], amps[mega]):
     ax_sc.plot(x, y, 'o', mfc='royalblue', mec='royalblue', mew=0, ms=8, alpha=0.85, clip_on=False)
 ax_sc.axhline(MEGASPIKE_THRESH, color='gray', ls='--', lw=1)
 ax_sc.set_xlim(0, XMAX)
+ax_sc.set_ylim(0, YMAX)
 ax_sc.set_xlabel('|axon − dendrite| offset |Δt| (ms)')
 ax_sc.set_ylabel('spike amplitude (mV)')
 ax_sc.legend(handles=[Line2D([], [], marker='o', ls='', mfc='none', mec='0.6', label='minispike'),
@@ -345,7 +347,7 @@ fig_sc.tight_layout()
 fig_sc.savefig('megaspike_scatter.svg', format='svg', bbox_inches='tight')
 
 #%% Histogram: fraction of triggered spikes that are megaspikes per 50 ms |Δt| bin
-BIN_MS  = 50
+BIN_MS  = 20
 h_edges = np.arange(0, XMAX + BIN_MS, BIN_MS)
 h_cent  = 0.5 * (h_edges[:-1] + h_edges[1:])
 
